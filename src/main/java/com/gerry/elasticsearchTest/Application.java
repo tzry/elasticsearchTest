@@ -17,16 +17,21 @@ import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.BoundTransportAddress;
 import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
 
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+
+import com.gerry.elasticsearchTest.struct.scrollStruct;
 
 
 public class Application {
@@ -36,52 +41,83 @@ public class Application {
                     .addTransportAddress(
                             new TransportAddress(InetAddress.getByName("121.43.169.16"),49300));
 
-            deleteIndex(client,"test");
-            createIndex(client,"test");
-            createMapping(client,"test");
+//            deleteIndex(client,"test");
+//            createIndex(client,"test");
+//            createMapping(client,"test");
+//
+//
+//            create(
+//                    client,
+//                    "test",
+//                    "美国留给伊拉克的是个烂摊子吗",
+//                    "新华社",
+//                    "新华社讯，美国留给伊拉克的是个烂摊子吗",
+//                    "1"
+//            );
+//            create(
+//                    client,
+//                    "test",
+//                    "公安部：各地校车将享最高路权",
+//                    "CNN",
+//                    "公安部：各地校车将享最高路权",
+//                    "2"
+//            );
+//
+//            create(
+//                    client,
+//                    "test",
+//                    "中韩渔警冲突调查：韩警平均每天扣1艘中国渔船",
+//                    "BBC",
+//                    "中韩渔警冲突调查：韩警平均每天扣1艘中国渔船",
+//                    "3"
+//            );
+//
+//            create(
+//                    client,
+//                    "test",
+//                    "中国驻洛杉矶领事馆遭亚裔男子枪击 嫌犯已自首",
+//                    "美联社",
+//                    "中国驻洛杉矶领事馆遭亚裔男子枪击 嫌犯已自首",
+//                    "4"
+//            );
+//
+//            System.out.println(get(client,"test","1"));
+//            System.out.println(get(client,"test","2"));
+//            System.out.println(get(client,"test","3"));
+//            System.out.println(get(client,"test","4"));
+
+//            create(
+//                    client,
+//                    "test",
+//                    "中国国歌",
+//                    "知乎",
+//                    "中国的国歌是义勇军进行曲",
+//                    "5"
+//            );
+//            create(
+//                    client,
+//                    "test",
+//                    "中国国庆节",
+//                    "知乎",
+//                    "中国的国庆节是十月一日",
+//                    "6"
+//            );
+//            search(client,"test","中国");
+
+//            scrollStruct stru=getScrollSearch(
+//                    client,
+//                    "test",
+//                    "中国",
+//                    1,
+//                    5
+//            );
+//
+//            for(String s:stru.list){
+//                System.out.println(s);
+//            }
 
 
-            create(
-                    client,
-                    "test",
-                    "美国留给伊拉克的是个烂摊子吗",
-                    "新华社",
-                    "新华社讯，美国留给伊拉克的是个烂摊子吗",
-                    "1"
-            );
-            create(
-                    client,
-                    "test",
-                    "公安部：各地校车将享最高路权",
-                    "CNN",
-                    "公安部：各地校车将享最高路权",
-                    "2"
-            );
 
-            create(
-                    client,
-                    "test",
-                    "中韩渔警冲突调查：韩警平均每天扣1艘中国渔船",
-                    "BBC",
-                    "中韩渔警冲突调查：韩警平均每天扣1艘中国渔船",
-                    "3"
-            );
-
-            create(
-                    client,
-                    "test",
-                    "中国驻洛杉矶领事馆遭亚裔男子枪击 嫌犯已自首",
-                    "美联社",
-                    "中国驻洛杉矶领事馆遭亚裔男子枪击 嫌犯已自首",
-                    "4"
-            );
-
-            System.out.println(get(client,"test","1"));
-            System.out.println(get(client,"test","2"));
-            System.out.println(get(client,"test","3"));
-            System.out.println(get(client,"test","4"));
-
-            search(client,"test","BBC");
             client.close();
         }
         catch (Exception e){
@@ -238,6 +274,12 @@ public class Application {
         client.prepareDelete(index,"fulltext",id).get();
     }
 
+    /**
+     * 简易分页搜索
+     * @param client
+     * @param index
+     * @param keyword
+     */
     public static void search(
             TransportClient client,
             String index,
@@ -266,5 +308,162 @@ public class Application {
             System.out.println(hits.getHits()[i].getSourceAsString());
             System.out.println(hits.getHits()[i].getId());
         }
+    }
+
+
+    /**
+     * 得到总数
+     * @param client
+     * @param index
+     * @param keyword
+     * @return
+     */
+    public static long searchCount(
+            TransportClient client,
+            String index,
+            String keyword
+    )
+    {
+        SearchResponse response = client.prepareSearch(index)
+                .setTypes("fulltext")
+                .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+                .setQuery(
+                        QueryBuilders.boolQuery().should(
+                                QueryBuilders.matchQuery("title", keyword)
+                        )
+                                .should(
+                                        QueryBuilders.matchQuery("author", keyword)
+                                )
+                                .should(
+                                        QueryBuilders.matchQuery("content", keyword)
+                                )
+                )
+                .get();
+
+        return response.getHits().getTotalHits();
+    }
+
+    /**
+     * 得到scrollid
+     * @param client
+     * @param index
+     * @param keyword
+     * @param size
+     * @param showdetail
+     * @return
+     */
+    public static scrollStruct getScrollSearchId(
+            TransportClient client,
+            String index,
+            String keyword,
+            int size,
+            boolean showdetail
+    )
+    {
+        scrollStruct stru=new scrollStruct();
+
+        SearchResponse response = client.prepareSearch(index)
+                .setTypes("fulltext")
+                .setSearchType(SearchType.DFS_QUERY_THEN_FETCH)
+                .setScroll(TimeValue.timeValueMinutes(1))
+                .setQuery(
+                        QueryBuilders.boolQuery().should(
+                                QueryBuilders.matchQuery("title", keyword)
+                        )
+                                .should(
+                                        QueryBuilders.matchQuery("author", keyword)
+                                )
+                                .should(
+                                        QueryBuilders.matchQuery("content", keyword)
+                                )
+                )
+                .setSize(size)
+                .get();
+        stru.total=response.getHits().getTotalHits();
+        stru.scrollid=response.getScrollId();
+        stru.page=1;
+
+        if(showdetail){
+            SearchHits hits = response.getHits();
+            for (int i = 0; i < hits.getHits().length; i++) {
+                stru.list.add(
+                        hits.getHits()[i].getSourceAsString()
+                );
+            }
+        }
+
+        return stru;
+    }
+
+    /**
+     * scrollSearch分页
+     * @param client
+     * @param scrollid
+     */
+    public static scrollStruct getScrollSearch(
+            TransportClient client,
+            String scrollid,
+            int page,
+            boolean showdetail
+    )
+    {
+        scrollStruct stru=new scrollStruct();
+
+        SearchResponse response = client.prepareSearchScroll(scrollid)
+                .setScroll(TimeValue.timeValueMinutes(1))
+                .get();
+
+        stru.total=response.getHits().getTotalHits();
+        stru.scrollid=response.getScrollId();
+        stru.page=page;
+
+        if(showdetail){
+            SearchHits hits = response.getHits();
+            for (int i = 0; i < hits.getHits().length; i++) {
+                stru.list.add(
+                        hits.getHits()[i].getSourceAsString()
+                );
+            }
+        }
+
+        return stru;
+    }
+
+
+    /**
+     * 分页搜索
+     * @param client
+     * @param index
+     * @param keyword
+     * @param size
+     * @param page
+     * @return
+     */
+    public static scrollStruct getScrollSearch(
+            TransportClient client,
+            String index,
+            String keyword,
+            int size,
+            int page
+    )
+    {
+        scrollStruct stru=getScrollSearchId(
+                client,
+                index,
+                keyword,
+                size,
+                page==1
+        );
+
+        while (stru.page!=page){
+            stru=getScrollSearch(
+                    client,
+                    stru.scrollid,
+                    stru.page+1,
+                    (stru.page+1)==page
+            );
+        }
+
+        return stru;
     }
 }
